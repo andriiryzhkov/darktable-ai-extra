@@ -1,0 +1,83 @@
+name: Check models
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# one check per PR; new pushes cancel the previous run
+concurrency:
+  group: check-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # `dtai list --json-output` emits [{"id": ..., "dep_group": ...}], which
+  # feeds the matrix below – one job per model, so models with dependency
+  # sets that can't coexist still build.
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.find.outputs.models }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - id: find
+        name: Discover non-skipped models
+        run: |
+          models=$(uv run dtai list --json-output)
+          echo "models=$models" >> "$GITHUB_OUTPUT"
+          echo "Will check: $models"
+
+  check:
+    needs: discover
+    if: ${{ needs.discover.outputs.models != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.discover.outputs.models) }}
+    name: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Only this model's dependency group, so a heavy group is not
+      # installed for models that don't need it.
+      - name: Install dependencies
+        run: uv sync --group ${{ matrix.dep_group }}
+
+      - name: Download checkpoints
+        run: uv run dtai setup ${{ matrix.id }}
+
+      - name: Convert to ONNX
+        run: uv run dtai convert ${{ matrix.id }}
+
+      - name: Validate output
+        run: uv run dtai validate ${{ matrix.id }}
+
+      # Uncomment once the model has a demo.py and samples/<task>/:
+      # - name: Run demo
+      #   run: uv run dtai demo ${{ matrix.id }}

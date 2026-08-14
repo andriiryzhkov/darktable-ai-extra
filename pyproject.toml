@@ -1,0 +1,45 @@
+[project]
+name = "darktable-ai-extra"
+version = "0.1.0"
+description = "Nonofficial extra model repository consumable by darktable as .dtmodel packages"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "darktable-ai-sdk>=0.1.0a1",
+    # `dtai validate` loads each export to check it; the SDK imports
+    # onnxruntime lazily and does not depend on it itself.
+    "onnxruntime>=1.18",
+    # demo scripts read and write images
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "scipy>=1.11",
+]
+
+# The SDK provides `dtai` with the full command set, and it finds this repo
+# by walking up from the cwd – so no console script is declared here. Two
+# packages owning the same script name collide, and install order picks the
+# winner. This repo's extra commands ride on the SDK's group instead:
+# `dtai` imports the module below on first command lookup.
+[tool.dtai]
+extend = "darktable_ai_extra.cli"
+
+[dependency-groups]
+# `core` is the default dep_group every model gets unless its model.yaml
+# names another, and CI runs `uv sync --group <dep_group>` – so this must
+# exist even when empty, or the first build fails on an unknown group.
+#
+# inpaint-lama sits in `core` and needs nothing extra: it ships a
+# pre-exported ONNX, so there is no torch/hydra conversion to run. Its
+# runtime deps (onnxruntime, numpy, pillow, scipy) are project
+# dependencies above, since demo.py needs them too.
+core = []
+
+# Add a group per model whose dependencies can't coexist with the others:
+#   my-model = ["torch>=2.2", "onnx>=1.16"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["darktable_ai_extra"]

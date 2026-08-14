@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Model artifacts / caches
+output/
+temp/
+models/*/checkpoints/
+models/*/vendor/
+*.dtmodel
+
+# Editors
+.vscode/
+.idea/

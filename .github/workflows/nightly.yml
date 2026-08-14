@@ -1,0 +1,177 @@
+name: Nightly models
+run-name: Nightly models
+
+# Rebuilds every model whenever a definition changes on the default branch
+# and rolls a single `nightly` pre-release. Useful for getting updated
+# weights in front of testers without cutting a real release.
+#
+# The tag is `nightly-X.Y.Z` once the repo has a `release-*` tag to derive
+# X.Y.Z from (via `dtai git-version --prefix`), so `releases-index.json`
+# can point a given darktable version at its own nightly channel. Before
+# the first release tag exists there is nothing to derive, and it falls
+# back to a single rolling `nightly`.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'models/**'
+      - '.github/workflows/nightly.yml'
+  workflow_dispatch:
+
+# one nightly at a time; new pushes cancel the previous run
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.find.outputs.models }}
+      tag: ${{ steps.ver.outputs.tag }}
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0  # git describe needs the tags
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - id: find
+        name: Discover models
+        run: |
+          models=$(uv run dtai list --json-output)
+          echo "models=$models" >> "$GITHUB_OUTPUT"
+
+      - id: ver
+        name: Derive the nightly channel from release-* tags
+        run: |
+          VERSION=$(uv run dtai git-version)
+          PREFIX=$(uv run dtai git-version --prefix)
+          # empty prefix means no release-* tag yet: one rolling channel
+          if [ -n "$PREFIX" ]; then TAG="nightly-$PREFIX"; else TAG="nightly"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "::notice::nightly channel $TAG (version $VERSION)"
+
+  build:
+    needs: discover
+    if: ${{ needs.discover.outputs.models != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.discover.outputs.models) }}
+    name: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group ${{ matrix.dep_group }}
+
+      - name: Download checkpoints
+        run: uv run dtai setup ${{ matrix.id }}
+
+      - name: Convert to ONNX
+        run: uv run dtai convert ${{ matrix.id }}
+
+      - name: Validate output
+        run: uv run dtai validate ${{ matrix.id }}
+
+      - name: Package model
+        run: uv run dtai package ${{ matrix.id }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.id }}
+          path: output/${{ matrix.id }}.dtmodel
+          retention-days: 1
+
+  publish:
+    needs: [discover, build]
+    # every model must have built – a partial nightly would hand testers
+    # a release that is silently missing models
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate versions.json
+        run: uv run dtai versions --artifacts-dir artifacts
+
+      # Move the tag to HEAD so the pre-release points at what was built.
+      - name: Move nightly tag
+        env:
+          TAG: ${{ needs.discover.outputs.tag }}
+        run: |
+          git tag -d "$TAG" 2>/dev/null || true
+          git push origin --delete "$TAG" 2>/dev/null || true
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Get build date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Publish nightly release
+        uses: ncipollo/release-action@v1.21.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag: ${{ needs.discover.outputs.tag }}
+          name: "nightly models build ${{ steps.date.outputs.date }}"
+          prerelease: true
+          allowUpdates: true     # roll the same pre-release each run
+          removeArtifacts: true  # drop stale .dtmodel assets first
+          body: |
+            Version: `${{ needs.discover.outputs.version }}`
+
+            Automatic build from the default branch, rebuilt whenever a
+            model definition changes.
+
+            Use these to try new or updated models without waiting for a
+            release. Things move faster here and behaviour can change
+            between runs – **use with caution**.
+
+            Install via *preferences → AI* in darktable, or download a
+            `.dtmodel` and use *install from file*.
+          artifacts: |
+            artifacts/*.dtmodel
+            output/versions.json
