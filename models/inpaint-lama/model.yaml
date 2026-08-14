@@ -1,0 +1,70 @@
+id: inpaint-lama
+name: "inpaint lama"
+description: "LaMa large-mask inpainting – fills masked regions with plausible content"
+task: inpaint
+version: "1.0"
+arch: lama
+type: single
+tiling: false
+dep_group: core
+
+# No `convert:` step. Upstream LaMa is a PyTorch checkpoint whose Fast
+# Fourier Convolution layers need a hand-patched FourierUnit before
+# torch.onnx.export will emit a working graph. Carve already did that work
+# and published the result under Apache-2.0, so the checkpoint below IS the
+# final artefact: it downloads straight into output/ and `dtai convert`
+# only has to emit config.json.
+checkpoints:
+  - url: "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx"
+    path: "output/inpaint-lama/model.onnx"
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # Spatial dims are baked in at 512x512; only the batch axis is dynamic.
+  # Larger images must be processed as 512x512 crops around the hole.
+  input_sizes: [512]
+  fixed_spatial: true
+  color_space: rgb
+
+  # I/O contract. darktable's C code has no `inpaint` task, so this model
+  # is driven from Lua via darktable.ai.load_model / :run – these keys are
+  # what a script needs to call it correctly.
+  input_names: [image, mask]
+  output_names: [output]
+  # image: float32 [B,3,512,512], RGB in [0,1]
+  input_range: [0.0, 1.0]
+  # mask: float32 [B,1,512,512], 1 = pixel to inpaint, 0 = keep
+  mask_value_hole: 1
+  # The graph zeroes the masked region itself, so whatever is under the
+  # mask on input is ignored – no need to pre-fill the hole.
+  masked_input_ignored: true
+  # output: float32 [B,3,512,512] in [0,255]. Divide by 255.
+  output_scale: 255
+  # Unmasked pixels come back bit-exact, so the graph has already
+  # composited; a consumer does not need to blend the result.
+  output_composited: true
+
+  # How to apply a 512x512 graph to a full-resolution photo. Take a
+  # 512x512 window at native resolution centred on the masked region,
+  # inpaint it, and paste it back – no resampling, and because the graph
+  # composites, the paste needs no feathering.
+  strategy: crop_around_mask
+  # LaMa needs context around the hole. Past roughly this fraction of the
+  # window the fill degrades badly, so a bigger hole needs the downscale
+  # fallback (resize to 512, inpaint, upscale the filled region) at the
+  # cost of a visibly softer patch.
+  max_hole_fraction: 0.4
+  # Windows are cheapest one at a time: batching several crops gives no
+  # per-tile speedup (measured slightly worse).
+  prefers_batch: false
+
+model_card:
+  long_description: "LaMa (Large Mask inpainting) fills user-marked regions with plausible content – removing power lines, sensor dust, or unwanted small objects. Its Fast Fourier Convolutions give a global receptive field from the first layer, which is why it handles large contiguous holes and repetitive structure (brickwork, fences, foliage) far better than patch-based healing. This package is the Carve ONNX export, fixed at 512x512 input"
+  scope: "large-mask image inpainting / object removal"
+  author: "Roman Suvorov et al. (Samsung Research)"
+  source: "https://github.com/advimman/lama"
+  paper: "https://arxiv.org/abs/2109.07161"
+  license: "Apache-2.0"
+  training_data: "Places365-Challenge (~8M scene photographs, MIT CSAIL) with synthetic large-mask augmentation"
+  training_data_license: "Non-commercial research and educational use only. The Places2 terms of use restrict the image data to non-commercial research; copyright in the individual photographs remains with their owners"
+  notes: "The code and this ONNX export are Apache-2.0, but the weights were trained on Places2, whose data licence is research-only – check your own position before using output commercially. The export has a fixed 512x512 input: larger images must be handled as crops around the masked region, and a hole bigger than 512px cannot be filled in one pass. Output is in [0,255] rather than [0,1], and already composited with the unmasked input. darktable has no built-in `inpaint` task, so this model is driven from Lua"
