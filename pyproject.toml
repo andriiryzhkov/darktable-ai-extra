@@ -12,6 +12,7 @@ dependencies = [
     # demo scripts read and write images
     "numpy>=1.26",
     "pillow>=10.0",
+    # inpaint-lama's demo only: ndimage.label finds the masked blobs
     "scipy>=1.11",
 ]
 
@@ -34,8 +35,17 @@ extend = "darktable_ai_extra.cli"
 # dependencies above, since demo.py needs them too.
 core = []
 
-# Add a group per model whose dependencies can't coexist with the others:
-#   my-model = ["torch>=2.2", "onnx>=1.16"]
+# One group per architecture, composed from `core`, as in darktable-ai.
+# Both BiRefNet packages share this one and add nothing to it: they ship a
+# pre-exported ONNX, so `core` plus the project dependencies already cover
+# them. Naming it now gives them their own CI job and somewhere for a
+# birefnet-only dependency to go later.
+birefnet = [
+    {include-group = "core"},
+]
+
+# Add a group per architecture that needs more than `core`:
+#   my-arch = [{include-group = "core"}, "torch>=2.2", "onnx>=1.16"]
 
 [build-system]
 requires = ["hatchling"]

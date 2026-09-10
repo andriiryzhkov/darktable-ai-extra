@@ -51,6 +51,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+birefnet = []
 core = []
 
 [[package]]

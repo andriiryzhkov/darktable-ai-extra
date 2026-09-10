@@ -1,0 +1,55 @@
+id: mask-subject-birefnet-lite
+name: "mask subject birefnet lite"
+description: "BiRefNet Lite for automatic subject / foreground segmentation"
+task: mask
+version: "0.1"
+arch: birefnet
+type: single
+tiling: false
+dep_group: birefnet
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # Spatial dims are baked in at 1024x1024; nothing about the graph is
+  # dynamic, so the whole frame is resampled to fit rather than tiled.
+  input_sizes: [1024]
+  fixed_spatial: true
+  color_space: rgb
+  strategy: resize_whole_image
+
+  # I/O contract. darktable's segmentation code only knows the `sam`,
+  # `sam2` and `segnext` arches (common/ai/segmentation.c:327), so this
+  # model is driven from Lua via darktable.ai.load_model / :run - these
+  # keys are what a script needs to call it correctly.
+  input_names: [input_image]
+  output_names: [output_image]
+  # input: [1,3,1024,1024] RGB in [0,1], then ImageNet-normalized. The
+  # fp16 package keeps float32 at the graph boundary and casts internally,
+  # so a caller feeds float32 either way.
+  input_range: [0.0, 1.0]
+  input_mean: [0.485, 0.456, 0.406]
+  input_std: [0.229, 0.224, 0.225]
+  # output: [1,1,1024,1024] logits, measured around -44..25. A consumer
+  # applies sigmoid and gets a soft alpha, not a binary mask.
+  output_logits: true
+  # One forward pass returns the dominant subject; there are no click
+  # prompts, unlike the SAM 2.1 and SegNext models.
+  prompts: false
+
+model_card:
+  long_description: "BiRefNet Lite (Swin Tiny backbone) for automatic subject extraction. Produces a foreground mask of the dominant subject in a single forward pass – no click prompts required. Complements the click-based SAM 2.1 and SegNext models for cases where the scene has one clear primary subject"
+  scope: "automatic subject / foreground segmentation"
+  author: "Peng Zheng et al."
+  source: "https://github.com/ZhengPeng7/BiRefNet"
+  paper: "https://arxiv.org/abs/2401.03407"
+  license: "MIT"
+  training_data: "DIS5K – 5470 high-resolution images collected from Flickr and manually annotated for dichotomous image segmentation"
+  training_data_license: "DIS5K dataset under Apache 2.0; the Flickr-sourced images do not carry documented per-image creator consent"
+  notes: "Lite variant uses swin_v1_t (Swin Tiny) backbone, smaller than the full BiRefNet's swin_v1_l. Trained primarily for dichotomous image segmentation and salient object detection; best on scenes with one clear subject; darktable's built-in segmentation path only recognises the sam, sam2 and segnext architectures, so this model is driven from Lua"
+
+checkpoints:
+  # FP16 variant by default (109 MiB). For FP32 (214 MiB) change the URL
+  # to `onnx/model.onnx` from the same HF path. Both keep float32 at the
+  # graph boundary, so a caller sees the same I/O either way.
+  - url: "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model_fp16.onnx"
+    path: "output/mask-subject-birefnet-lite/model.onnx"
