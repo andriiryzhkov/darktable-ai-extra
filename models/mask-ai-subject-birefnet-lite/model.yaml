@@ -52,4 +52,4 @@ checkpoints:
   # to `onnx/model.onnx` from the same HF path. Both keep float32 at the
   # graph boundary, so a caller sees the same I/O either way.
   - url: "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model_fp16.onnx"
-    path: "output/mask-subject-birefnet-lite/model.onnx"
+    path: "output/mask-ai-subject-birefnet-lite/model.onnx"
