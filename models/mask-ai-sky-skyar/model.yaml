@@ -1,0 +1,63 @@
+id: mask-ai-sky-skyar
+name: "mask sky skyar"
+description: "SkyAR sky matting for automatic sky masks (non-commercial license)"
+task: mask-ai-sky
+version: "0.1"
+arch: skyar
+type: single
+tiling: false
+dep_group: skyar
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # Exported at 384x384, the size SkyAR was trained and run at; nothing
+  # about the graph is dynamic, so the whole frame is resampled to fit
+  # rather than tiled.
+  input_sizes: [384]
+  fixed_spatial: true
+  color_space: rgb
+  strategy: resize_whole_image
+
+  input_names: [input_image]
+  output_names: [output_image]
+  # input: [1,3,384,384] RGB in [0,1], not normalized: SkyAR feeds the
+  # network plain [0,1] pixels (vendor/SkyAR/skymagic.py:101, then 77-80).
+  input_range: [0.0, 1.0]
+  input_mean: [0.0, 0.0, 0.0]
+  input_std: [1.0, 1.0, 1.0]
+  # output: [1,1,384,384] sky matte in [0,1]. The network ends in a
+  # sigmoid, so a consumer must not apply another.
+  output_logits: false
+  # One forward pass returns the sky; there are no click prompts.
+  prompts: false
+
+model_card:
+  long_description: "SkyAR sky matting network (ResNet-50 with CoordConv). One pass over the whole frame gives a soft sky matte, with no click prompts. Licensed for non-commercial use only (CC BY-NC-SA 4.0): do not use it on work you are paid for or sell. Its raw matte is softer than skyseg's; upstream sharpens it with a guided filter, which the blend panel's feathering, guided by the image, can stand in for"
+  scope: "automatic sky segmentation"
+  author: "Zhengxia Zou"
+  source: "https://github.com/jiupinjia/SkyAR"
+  paper: "https://arxiv.org/abs/2010.11800"
+  license: "CC BY-NC-SA 4.0 (non-commercial)"
+  training_data: "sky mattes by Liba et al. (CVPRW 2020) over ADE20K images, subset ADE20K+DE+GF: 9187 training and 885 validation images"
+  training_data_license: "ADE20K images are for non-commercial research and educational use only"
+  notes: "both the weights and their training images are non-commercial, so this model is unsuitable for commercial work whatever darktable's own license allows. skyseg (mask-ai-sky-skyseg) is the MIT-licensed alternative for the same task"
+
+# The network definition, imported by convert.py.
+repo:
+  submodule: vendor/SkyAR
+
+checkpoints:
+  # Upstream's Google Drive release: a zip holding
+  # checkpoints_G_coord_resnet50/best_ckpt.pt, which also carries the
+  # optimizer state, so it is three times the size of the export.
+  - url: "gdrive://1COMROzwR4R_7mym6DL9LXhHQlJmJaV0J"
+    path: "temp/mask-ai-sky-skyar/checkpoints_G_coord_resnet50.zip"
+
+convert:
+  - script: convert.py
+    args:
+      checkpoint: "{temp}/checkpoints_G_coord_resnet50.zip"
+      repo_dir: "{repo}"
+      output_dir: "{output}"
+      size: 384
+      opset: 17

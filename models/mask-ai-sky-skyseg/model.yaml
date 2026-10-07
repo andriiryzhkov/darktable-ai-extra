@@ -1,0 +1,55 @@
+id: mask-ai-sky-skyseg
+name: "mask sky skyseg"
+description: "U2-Net sky segmentation for automatic sky masks"
+task: mask-ai-sky
+version: "0.1"
+arch: u2net
+type: single
+tiling: false
+dep_group: skyseg
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # Spatial dims are baked in at 320x320; nothing about the graph is
+  # dynamic, so the whole frame is resampled to fit rather than tiled.
+  input_sizes: [320]
+  fixed_spatial: true
+  color_space: rgb
+  strategy: resize_whole_image
+
+  # I/O contract, after convert.py has cut the graph down to one output
+  # and renamed the tensors.
+  input_names: [input_image]
+  output_names: [output_image]
+  # input: [1,3,320,320] RGB in [0,1], then ImageNet-normalized.
+  input_range: [0.0, 1.0]
+  input_mean: [0.485, 0.456, 0.406]
+  input_std: [0.229, 0.224, 0.225]
+  # output: [1,1,320,320] sky probability in [0,1]. U2-Net applies the
+  # sigmoid inside the graph, so a consumer must not apply another.
+  output_logits: false
+  # One forward pass returns the sky; there are no click prompts.
+  prompts: false
+
+model_card:
+  long_description: "U2-Net trained for sky segmentation. One pass over the whole frame gives a soft sky mask, with no click prompts. The mask is computed at 320x320, so edges against foliage and fine detail are coarse; the blend panel's feathering, guided by the image, refines them"
+  scope: "automatic sky segmentation"
+  author: "xiongzhu666"
+  source: "https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing"
+  paper: "https://arxiv.org/abs/2005.09007"
+  license: "MIT"
+  training_data: "not disclosed by upstream"
+  training_data_license: "unknown: the training data is not disclosed"
+  notes: "the paper link is U2-Net, the architecture (Apache-2.0); the sky model has no paper of its own. Upstream notes that some building detail is taken for sky and that some textured clouds are missed. The ONNX comes from the JianyuanWang/skyseg mirror on Hugging Face, also MIT"
+
+checkpoints:
+  # Upstream's ONNX, with all seven U2-Net outputs; convert.py keeps the
+  # fused one.
+  - url: "https://huggingface.co/JianyuanWang/skyseg/resolve/main/skyseg.onnx"
+    path: "temp/mask-ai-sky-skyseg/skyseg.onnx"
+
+convert:
+  - script: convert.py
+    args:
+      source: "{temp}/skyseg.onnx"
+      output_dir: "{output}"

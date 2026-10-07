@@ -44,6 +44,23 @@ birefnet = [
     {include-group = "core"},
 ]
 
+# skyseg ships a pre-exported ONNX, but with U2-Net's six side outputs
+# still attached; convert.py needs onnx to cut the graph down to the fused
+# one.
+skyseg = [
+    {include-group = "core"},
+    "onnx>=1.16",
+]
+
+# SkyAR is a PyTorch checkpoint, exported here with the network code from
+# vendor/SkyAR. `dynamo=False` in convert.py needs torch 2.5 or newer.
+skyar = [
+    {include-group = "core"},
+    "torch>=2.5",
+    "torchvision>=0.20",
+    "onnx>=1.16",
+]
+
 # Add a group per architecture that needs more than `core`:
 #   my-arch = [{include-group = "core"}, "torch>=2.2", "onnx>=1.16"]
 

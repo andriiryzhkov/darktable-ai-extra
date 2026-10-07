@@ -1,0 +1,3 @@
+[submodule "vendor/SkyAR"]
+	path = vendor/SkyAR
+	url = https://github.com/jiupinjia/SkyAR.git
