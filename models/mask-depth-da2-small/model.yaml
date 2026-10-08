@@ -1,0 +1,56 @@
+id: mask-depth-da2-small
+name: "mask depth anything v2 small"
+description: "Depth Anything V2 Small relative depth, for depth-based masks"
+task: mask-depth
+version: "1.0"
+arch: da2
+type: single
+tiling: false
+dep_group: core
+
+# No `convert:` step: the onnx-community export of the official Small
+# checkpoint is used as it is, downloaded straight into output/, so
+# `dtai convert` only has to emit config.json.
+checkpoints:
+  - url: "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx"
+    path: "output/mask-depth-da2-small/model.onnx"
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # The spatial dims are dynamic: the graph takes any size and returns
+  # the input size rounded down to a multiple of 14, the ViT patch size.
+  # Upstream's preprocessing (preprocessor_config.json) keeps the aspect
+  # ratio, brings the short side to 518 and both sides to multiples of
+  # 14; stretching to a 518 square also runs, with less detail.
+  input_sizes: [518]
+  fixed_spatial: false
+  keep_aspect_ratio: true
+  ensure_multiple_of: 14
+  color_space: rgb
+
+  # I/O contract. darktable has no built-in depth task, so this model is
+  # driven from Lua via darktable.ai.load_model / :run – these keys are
+  # what a script needs to call it correctly.
+  input_names: [pixel_values]
+  output_names: [predicted_depth]
+  # input: float32 [1,3,H,W], RGB in [0,1], then ImageNet-normalized
+  input_range: [0.0, 1.0]
+  input_mean: [0.485, 0.456, 0.406]
+  input_std: [0.229, 0.224, 0.225]
+  # output: float32 [1,H,W] relative inverse depth (disparity): larger is
+  # nearer. Unbounded, with a scale and offset of its own per image, so a
+  # consumer normalizes it per image rather than reading absolute
+  # distances.
+  output_inverse_depth: true
+  prompts: false
+
+model_card:
+  long_description: "Depth Anything V2 Small estimates relative depth from a single photograph: a map that is bright for what is near and dark for what is far, sharp along object edges. It can drive depth-based masks, such as selecting the foreground or the distance. The Small variant (~25M parameters) is the only one of the family under Apache-2.0; Base and Large are non-commercial"
+  scope: "monocular relative depth estimation"
+  author: "Lihe Yang et al. (HKU, TikTok)"
+  source: "https://github.com/DepthAnything/Depth-Anything-V2"
+  paper: "https://arxiv.org/abs/2406.09414"
+  license: "Apache-2.0"
+  training_data: "teacher on synthetic data: Hypersim, Virtual KITTI 2, TartanAir, BlendedMVS, IRS (595K images); student on pseudo-labelled real images: BDD100K, Google Landmarks, ImageNet-21K, LSUN, Objects365, Open Images V7, Places365, SA-1B (62M images). DINOv2-Small encoder pretrained on LVD-142M"
+  training_data_license: "mixed: SA-1B research-only, Places365 non-commercial research, LVD-142M not released; the others under various open terms"
+  notes: "the weights are Apache-2.0, but part of the training data is research-only or non-commercial, and LVD-142M (142M web-crawled images) is not public and cannot be audited. The output is relative, not metric: it ranks what is nearer, with no distance in meters. darktable has no built-in depth task, so this model is driven from Lua"
