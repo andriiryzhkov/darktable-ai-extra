@@ -1,0 +1,58 @@
+id: mask-ai-subject-isnet
+name: "mask subject isnet"
+description: "IS-Net (general use) for fast automatic subject / foreground segmentation"
+task: mask-ai-subject
+version: "0.1"
+arch: isnet
+type: single
+tiling: false
+dep_group: isnet
+
+# Measured against the exported graph, not copied from upstream docs.
+attributes:
+  # Spatial dims are baked in at 1024x1024; nothing about the graph is
+  # dynamic, so the whole frame is resampled to fit rather than tiled.
+  input_sizes: [1024]
+  fixed_spatial: true
+  color_space: rgb
+  strategy: resize_whole_image
+
+  # I/O contract, after convert.py has cut the graph down to one output.
+  input_names: [input_image]
+  output_names: [output_image]
+  # input: [1,3,1024,1024] RGB in [0,1], then shifted by 0.5 with no
+  # scaling, as upstream's Inference.py does.
+  input_range: [0.0, 1.0]
+  input_mean: [0.5, 0.5, 0.5]
+  input_std: [1.0, 1.0, 1.0]
+  # output: [1,1,1024,1024] subject probability in [0,1]. IS-Net applies
+  # the sigmoid inside the graph, so a consumer must not apply another.
+  # Upstream also stretches the result to its min and max; on the sample
+  # images the output already spans 0..1, so nothing is lost without it.
+  output_logits: false
+  # One forward pass returns the dominant subject; there are no click
+  # prompts.
+  prompts: false
+
+model_card:
+  long_description: "IS-Net, the dichotomous image segmentation network BiRefNet was built to improve on, in the authors' weights for general use. One pass over the whole frame gives a soft subject mask, with no click prompts. It runs about twenty times faster than BiRefNet on CPU at the same 1024x1024 input, but its masks are less solid: it finds the right subject, yet tends to leave grey or see-through patches inside it, such as a tram's windows. Pick it for speed on simple subjects; pick BiRefNet when the mask must be solid"
+  scope: "automatic subject / foreground segmentation"
+  author: "Xuebin Qin et al."
+  source: "https://github.com/xuebinqin/DIS"
+  paper: "https://arxiv.org/abs/2203.03041"
+  license: "Apache-2.0"
+  training_data: "not stated for the general-use weights, which upstream calls 'not DIS V2.0'; upstream's academic IS-Net (isnet.pth) was trained on DIS5K V1.0"
+  training_data_license: "unknown for these weights; DIS5K's terms of use are in upstream's DIS5K-Dataset-Terms-of-Use.pdf"
+  notes: "isnet-general-use, released by upstream on 2022-08-17 as 'the optimized model for general use of our IS-Net'. The ONNX is the export published with rembg (MIT), which keeps all twelve outputs; convert.py keeps the first, the prediction upstream uses. About 44M parameters"
+
+checkpoints:
+  # rembg's export of upstream's isnet-general-use.pth, with all six side
+  # sigmoids and six feature maps; convert.py keeps the first sigmoid.
+  - url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx"
+    path: "temp/mask-ai-subject-isnet/isnet-general-use.onnx"
+
+convert:
+  - script: convert.py
+    args:
+      source: "{temp}/isnet-general-use.onnx"
+      output_dir: "{output}"

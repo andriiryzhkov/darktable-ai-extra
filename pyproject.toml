@@ -52,6 +52,14 @@ skyseg = [
     "onnx>=1.16",
 ]
 
+# IS-Net ships a pre-exported ONNX, but with its eleven training outputs
+# still attached; convert.py needs onnx to cut the graph down to the
+# prediction.
+isnet = [
+    {include-group = "core"},
+    "onnx>=1.16",
+]
+
 # SkyAR is a PyTorch checkpoint, exported here with the network code from
 # vendor/SkyAR. `dynamo=False` in convert.py needs torch 2.5 or newer.
 skyar = [

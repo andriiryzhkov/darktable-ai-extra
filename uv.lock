@@ -121,6 +121,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+isnet = [
+    { name = "onnx" },
+]
 skyar = [
     { name = "onnx" },
     { name = "torch" },
@@ -142,6 +145,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 birefnet = []
 core = []
+isnet = [{ name = "onnx", specifier = ">=1.16" }]
 skyar = [
     { name = "onnx", specifier = ">=1.16" },
     { name = "torch", specifier = ">=2.5" },
