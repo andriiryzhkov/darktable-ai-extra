@@ -28,9 +28,8 @@ attributes:
   ensure_multiple_of: 14
   color_space: rgb
 
-  # I/O contract. darktable has no built-in depth task, so this model is
-  # driven from Lua via darktable.ai.load_model / :run – these keys are
-  # what a script needs to call it correctly.
+  # I/O contract, as darktable's mask-depth task reads it
+  # (src/common/ai/depth.h): the depth channel of parametric masks.
   input_names: [pixel_values]
   output_names: [predicted_depth]
   # input: float32 [1,3,H,W], RGB in [0,1], then ImageNet-normalized
@@ -53,4 +52,4 @@ model_card:
   license: "Apache-2.0"
   training_data: "teacher on synthetic data: Hypersim, Virtual KITTI 2, TartanAir, BlendedMVS, IRS (595K images); student on pseudo-labelled real images: BDD100K, Google Landmarks, ImageNet-21K, LSUN, Objects365, Open Images V7, Places365, SA-1B (62M images). DINOv2-Small encoder pretrained on LVD-142M"
   training_data_license: "mixed: SA-1B research-only, Places365 non-commercial research, LVD-142M not released; the others under various open terms"
-  notes: "the weights are Apache-2.0, but part of the training data is research-only or non-commercial, and LVD-142M (142M web-crawled images) is not public and cannot be audited. The output is relative, not metric: it ranks what is nearer, with no distance in meters. darktable has no built-in depth task, so this model is driven from Lua"
+  notes: "the weights are Apache-2.0, but part of the training data is research-only or non-commercial, and LVD-142M (142M web-crawled images) is not public and cannot be audited. The output is relative, not metric: it ranks what is nearer, with no distance in meters. darktable uses it for the depth channel of parametric masks"
